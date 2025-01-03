@@ -132,17 +132,6 @@
       background: rgba(0, 0, 0, 0.5);
       z-index: 1000;
     }
-    .version-container {
-      margin-top: 20px;
-    }
-    .version-item {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .version-item button {
-      background-color: #e74c3c;
-    }
   </style>
 </head>
 <body>
@@ -156,18 +145,13 @@
       <button onclick="showPage('graphique')">Graphique</button>
       <button onclick="showPage('details')">Détails</button>
       <button onclick="showPage('parametres')">Paramètres</button>
-      <button onclick="showPage('version')">Versions</button>
       <button onclick="showResetConfirmation()">Réinitialiser</button>
-      <button onclick="showEnterCodeModal()">Entrer un code</button>
     </div>
   </nav>
 
   <div class="container">
     <div id="graphiquePage">
       <canvas id="lineChart" width="400" height="200"></canvas>
-      <div>
-        <button onclick="goBack()">Retour</button>
-      </div>
       <div id="initialAmountModal" class="hidden">
         <label>Entrez votre montant initial :</label>
         <input type="number" id="initialAmount" />
@@ -201,49 +185,31 @@
       </select>
       <button onclick="showAddCurrencyModal()">+ Ajouter une devise</button>
     </div>
-
-    <div id="addCurrencyModal" class="dialog hidden">
-      <h3>Ajouter une Devise</h3>
-      <label>Nom de la devise :</label>
-      <input type="text" id="customCurrencyName" />
-      <label>Symbole :</label>
-      <input type="text" id="customCurrencySymbol" />
-      <button onclick="addCustomCurrency()">Ajouter</button>
-      <button onclick="closeAddCurrencyModal()">Annuler</button>
-    </div>
-
-    <div id="overlay" class="overlay hidden"></div>
-
-    <!-- Modal pour entrer un code -->
-    <div id="enterCodeModal" class="dialog hidden">
-      <h3>Entrer un code de partage</h3>
-      <input type="text" id="enteredCode" placeholder="Code généré" />
-      <button onclick="loadCode()">Charger</button>
-      <button onclick="closeEnterCodeModal()">Annuler</button>
-    </div>
-
-    <div id="versionPage" class="hidden version-container">
-      <h2>Versions des Graphiques</h2>
-      <div id="versionList">
-        <!-- Versions will be listed here -->
-      </div>
-      <button onclick="generateNewVersion()">Générer Nouvelle Version</button>
-    </div>
   </div>
+
+  <div id="addCurrencyModal" class="dialog hidden">
+    <h3>Ajouter une Devise</h3>
+    <label>Nom de la devise :</label>
+    <input type="text" id="customCurrencyName" />
+    <label>Symbole :</label>
+    <input type="text" id="customCurrencySymbol" />
+    <button onclick="addCustomCurrency()">Ajouter</button>
+    <button onclick="closeAddCurrencyModal()">Annuler</button>
+  </div>
+
+  <div id="overlay" class="overlay hidden"></div>
 
 <script>
   let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
   let currentBalance = parseFloat(localStorage.getItem('currentBalance')) || 0;
   let currentCurrency = localStorage.getItem('currency') || 'EUR';
-  let versionHistory = JSON.parse(localStorage.getItem('versionHistory')) || [];
-
   function toggleMenu() {
     const menuItems = document.querySelector('.menu-items');
     menuItems.classList.toggle('open');
   }
 
   function showPage(page) {
-    const pages = ['graphique', 'details', 'parametres', 'version'];
+    const pages = ['graphique', 'details', 'parametres'];
     pages.forEach(p => {
       document.getElementById(p + 'Page').classList.add('hidden');
     });
@@ -252,16 +218,17 @@
       renderChart();
     } else if (page === 'details') {
       renderDetails();
-    } else if (page === 'version') {
-      renderVersionHistory();
     }
   }
 
   function renderChart() {
     const ctx = document.getElementById('lineChart').getContext('2d');
+    
+    // Si un graphique existe déjà, on le détruit
     if (window.myChart) {
         window.myChart.destroy();
     }
+
     const data = {
         labels: transactions.map(t => t.date),
         datasets: [{
@@ -272,6 +239,8 @@
             fill: false
         }]
     };
+
+    // Crée un nouveau graphique
     window.myChart = new Chart(ctx, {
         type: 'line',
         data: data,
@@ -286,7 +255,8 @@
                     title: { display: true, text: 'Montant' }
                 }
             }
-        });
+        }
+    });
   }
 
   function renderDetails() {
@@ -299,56 +269,100 @@
     });
   }
 
-  function goBack() {
-    showPage('graphique');
-  }
-
-  function generateCode() {
-    const code = [...new Date().toISOString()].map(c => c.charCodeAt(0)).join('');
-    return code;
-  }
-
-  function showEnterCodeModal() {
-    document.getElementById('enterCodeModal').classList.remove('hidden');
+  function showAddCurrencyModal() {
+    document.getElementById('addCurrencyModal').classList.remove('hidden');
     document.getElementById('overlay').classList.remove('hidden');
   }
 
-  function closeEnterCodeModal() {
-    document.getElementById('enterCodeModal').classList.add('hidden');
+  function closeAddCurrencyModal() {
+    document.getElementById('addCurrencyModal').classList.add('hidden');
     document.getElementById('overlay').classList.add('hidden');
   }
 
-  function loadCode() {
-    const code = document.getElementById('enteredCode').value;
-    alert(`Code: ${code} chargé.`);
+  function addCustomCurrency() {
+    const name = document.getElementById('customCurrencyName').value;
+    const symbol = document.getElementById('customCurrencySymbol').value;
+    if (name && symbol) {
+      const currencySelect = document.getElementById('currencySelect');
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = `${name} (${symbol})`;
+      currencySelect.appendChild(option);
+      localStorage.setItem('customCurrency', JSON.stringify({ name, symbol }));
+      closeAddCurrencyModal();
+      alert(`La devise personnalisée "${name}" a été ajoutée.`);
+    } else {
+      alert('Veuillez remplir tous les champs.');
+    }
   }
 
-  function generateNewVersion() {
-    const version = {
-      date: new Date().toLocaleString(),
-      transactions: [...transactions]
-    };
-    versionHistory.push(version);
-    localStorage.setItem('versionHistory', JSON.stringify(versionHistory));
-    renderVersionHistory();
+  function changeCurrency() {
+    currentCurrency = document.getElementById('currencySelect').value;
+    localStorage.setItem('currency', currentCurrency);
+    alert(`La devise a été changée en ${currentCurrency}.`);
   }
 
-  function renderVersionHistory() {
-    const versionList = document.getElementById('versionList');
-    versionList.innerHTML = '';
-    versionHistory.forEach((version, index) => {
-      const div = document.createElement('div');
-      div.classList.add('version-item');
-      div.innerHTML = `<span>${version.date}</span> <button onclick="deleteVersion(${index})">Supprimer</button>`;
-      versionList.appendChild(div);
+  // Fonction d'ajouter ou soustraire le montant
+  function startTransaction(type) {
+    const amountInput = document.getElementById('amountInput');
+    let amount = parseFloat(amountInput.value);
+    if (isNaN(amount)) {
+      alert('Veuillez entrer un montant valide.');
+      return;
+    }
+
+    if (type === '+') {
+      currentBalance += amount;
+    } else if (type === '-') {
+      currentBalance -= amount;
+    }
+    
+    localStorage.setItem('currentBalance', currentBalance);
+    transactions.push({
+      date: new Date().toLocaleDateString(),
+      amount: amount,
+      currency: currentCurrency,
+      reason: '',
+      balance: currentBalance
     });
+    
+    renderChart();
+    renderDetails();
+    
+    // Afficher la modal pour la raison
+    showReasonModal();
   }
 
-  function deleteVersion(index) {
-    versionHistory.splice(index, 1);
-    localStorage.setItem('versionHistory', JSON.stringify(versionHistory));
-    renderVersionHistory();
+  // Fonction pour afficher la boîte de dialogue de la raison
+  function showReasonModal() {
+    document.getElementById('reasonModal').classList.remove('hidden');
   }
+
+  // Sauvegarder la transaction avec la raison
+  function saveTransaction() {
+    const reasonInput = document.getElementById('reasonInput');
+    const reason = reasonInput.value || 'Non spécifié';
+    const lastTransaction = transactions[transactions.length - 1];
+    lastTransaction.reason = reason;
+    
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+    reasonInput.value = '';
+    document.getElementById('reasonModal').classList.add('hidden');
+    renderDetails();
+  }
+
+  // Fonction de réinitialisation
+  function showResetConfirmation() {
+    const confirmation = confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données ?');
+    if (confirmation) {
+      localStorage.clear();
+      alert('Les données ont été réinitialisées.');
+      window.location.reload();
+    }
+  }
+
+  // Initialiser la page de graphique à la première visite
+  showPage('graphique');
 </script>
 
 </body>

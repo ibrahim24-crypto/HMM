@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestion de la Monnaie</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f8f0;
+      color: #333;
+    }
+    nav {
+      background-color: #2ecc71;
+      color: white;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    nav .menu-button {
+      background-color: transparent;
+      border: none;
+      color: white;
+      font-size: 30px;
+      cursor: pointer;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    nav .menu-button span {
+      display: block;
+      width: 25px;
+      height: 3px;
+      background-color: white;
+    }
+    nav .menu-items {
+      display: none;
+      flex-direction: column;
+      position: absolute;
+      top: 60px;
+      left: 0;
+      background: #2ecc71;
+      padding: 10px;
+      width: 100%;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    nav .menu-items.open {
+      display: flex;
+    }
+    nav .menu-items button {
+      background: #27ae60;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin: 5px 0;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 100%;
+    }
+    nav .menu-items button:hover {
+      background-color: #1e8449;
+    }
+    .container {
+      max-width: 800px;
+      margin: 100px auto 50px;
+      padding: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1e8449;
+    }
+    input, select {
+      padding: 10px;
+      margin: 5px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    canvas {
+      margin: 20px auto;
+      display: block;
+    }
+    .hidden {
+      display: none;
+    }
+    .dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 1001;
+    }
+    .dialog input {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    .dialog button {
+      margin-right: 10px;
+    }
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <button class="menu-button" onclick="toggleMenu()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <div class="menu-items">
+      <button onclick="showPage('graphique')">Graphique</button>
+      <button onclick="showPage('details')">Détails</button>
+      <button onclick="showPage('parametres')">Paramètres</button>
+      <button onclick="exportData()">Exporter</button>
+      <button onclick="importData()">Importer</button>
+      <button onclick="showResetConfirmation()">Réinitialiser</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="graphiquePage">
+      <canvas id="lineChart" width="400" height="200"></canvas>
+      <div id="initialAmountModal" class="dialog hidden">
+        <h3>Entrez votre montant initial :</h3>
+        <input type="number" id="initialAmount" />
+        <button onclick="saveInitialAmount()">Enregistrer</button>
+      </div>
+      <div>
+        <input type="number" id="amountInput" placeholder="Montant" />
+        <button onclick="startTransaction('+')">+</button>
+        <button onclick="startTransaction('-')">-</button>
+      </div>
+      <div id="reasonModal" class="dialog hidden">
+        <h3>Raison :</h3>
+        <input type="text" id="reasonInput" />
+        <button onclick="saveTransaction()">Enregistrer</button>
+      </div>
+    </div>
+
+    <div id="detailsPage" class="hidden">
+      <h2>Détails des Transactions</h2>
+      <ul id="transactionDetails"></ul>
+    </div>
+
+    <div id="parametresPage" class="hidden">
+      <h2>Paramètres</h2>
+      <label for="currencySelect">Changer la devise :</label>
+      <select id="currencySelect" onchange="changeCurrency()">
+        <option value="EUR">Euro (€)</option>
+        <option value="DH">Dirham Marocain (DH)</option>
+        <option value="USD">Dollar ($)</option>
+        <option value="JPY">Yen (¥)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay hidden"></div>
+
+<script>
+  let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+  let currentBalance = parseFloat(localStorage.getItem('currentBalance')) || 0;
+  let currentCurrency = localStorage.getItem('currency') || 'EUR';
+
+  function toggleMenu() {
+    const menuItems = document.querySelector('.menu-items');
+    menuItems.classList.toggle('open');
+  }
+
+  function showPage(page) {
+    const pages = ['graphique', 'details', 'parametres'];
+    pages.forEach(p => document.getElementById(p + 'Page').classList.add('hidden'));
+    document.getElementById(page + 'Page').classList.remove('hidden');
+    if (page === 'graphique') renderChart();
+    if (page === 'details') renderDetails();
+  }
+
+  function renderChart() {
+    const ctx = document.getElementById('lineChart').getContext('2d');
+    if (window.myChart) window.myChart.destroy();
+    window.myChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: transactions.map(t => t.date),
+        datasets: [{
+          label: 'Solde',
+          data: transactions.map(t => t.balance),
+          borderColor: '#2ecc71',
+          fill: false,
+        }]
+      }
+    });
+  }
+
+  function renderDetails() {
+    const detailsList = document.getElementById('transactionDetails');
+    detailsList.innerHTML = transactions.map(t =>
+      `<li>${t.date} - ${t.amount} ${t.currency} (${t.reason})</li>`
+    ).join('');
+  }
+
+  function startTransaction(type) {
+    const amount = parseFloat(document.getElementById('amountInput').value);
+    if (isNaN(amount)) return alert('Entrez un montant valide.');
+    currentBalance += type === '+' ? amount : -amount;
+    transactions.push({
+      date: new Date().toLocaleDateString(),
+      amount,
+      currency: currentCurrency,
+      reason: '',
+      balance: currentBalance
+    });
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+    localStorage.setItem('currentBalance', currentBalance);
+    renderChart();
+    showReasonModal();
+  }
+
+  function showReasonModal() {
+    document.getElementById('reasonModal').classList.remove('hidden');
+  }
+
+  function saveTransaction() {
+    const reason = document.getElementById('reasonInput').value || 'Non spécifié';
+    transactions[transactions.length - 1].reason = reason;
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+    document.getElementById('reasonModal').classList.add('hidden');
+    renderDetails();
+  }
+
+  function changeCurrency() {
+    currentCurrency = document.getElementById('currencySelect').value;
+    localStorage.setItem('currency', currentCurrency);
+  }
+
+  function exportData() {
+    const data = JSON.stringify({ transactions, currentBalance, currentCurrency });
+    const blob = new Blob([data], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'transactions.json';
+    link.click();
+  }
+
+  function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = event => {
+        const importedData = JSON.parse(event.target.result);
+        transactions = importedData.transactions || [];
+        currentBalance = importedData.currentBalance || 0;
+        currentCurrency = importedData.currentCurrency || 'EUR';
+        localStorage.setItem('transactions', JSON.stringify(transactions));
+        localStorage.setItem('currentBalance', currentBalance);
+        localStorage.setItem('currency', currentCurrency);
+        renderChart();
+        renderDetails();
+        alert('Données importées avec succès.');
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  function showResetConfirmation() {
+    if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données ?')) {
+      localStorage.clear();
+      transactions = [];
+      currentBalance = 0;
+      currentCurrency = 'EUR';
+      renderChart();
+      renderDetails();
+      alert('Données réinitialisées.');
+    }
+  }
+
+  function checkFirstVisit() {
+    if (!localStorage.getItem('visited')) {
+      document.getElementById('initialAmountModal').classList.remove('hidden');
+      document.getElementById('overlay').classList.remove('hidden');
+    }
+  }
+
+  function saveInitialAmount() {
+    const initialAmount = parseFloat(document.getElementById('initialAmount').value);
+    if (isNaN(initialAmount)) return alert('Veuillez entrer un montant valide.');
+    currentBalance = initialAmount;
+    localStorage.setItem('currentBalance', currentBalance);
+    localStorage.setItem('visited', 'true');
+    document.getElementById('initialAmountModal').classList.add('hidden');
+    document.getElementById('overlay').classList.add('hidden');
+    renderChart();
+  }
+
+  checkFirstVisit();
+</script>
+</body>
+</html>
